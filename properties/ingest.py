@@ -211,7 +211,7 @@ def ingest_feature(attributes, geometry=None, source_url="", observed_at=None):
             source=SOURCE,
             tax_year=tax_year,
             defaults=dict(
-                assessed_value=_dec(a.get("ASSESSED_VAL_CUR")),
+                assessed_value=_dec_fit(a.get("ASSESSED_VAL_CUR"), 14, 2),
                 source_url=source_url,
                 effective_date=date(tax_year, 1, 1),
                 observed_at=observed_at,
@@ -220,7 +220,7 @@ def ingest_feature(attributes, geometry=None, source_url="", observed_at=None):
 
     # 5) Deed — append-only sale event, deduped on (source, source_record_id).
     sale_date = _parse_yyyymmdd(a.get("DOS_1"))
-    sale_price = _dec(a.get("PRICE_1"))
+    sale_price = _dec_fit(a.get("PRICE_1"), 14, 2)  # fit-or-null: bad county price won't crash the batch
     if sale_date and sale_price:
         rec_id = f"{folio}:{a.get('DOS_1')}"
         Deed.objects.get_or_create(
