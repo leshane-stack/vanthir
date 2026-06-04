@@ -101,6 +101,26 @@ def _dec(v):
         return None
 
 
+def _dec_fit(v, max_digits, decimal_places):
+    """Decimal that fits a DecimalField(max_digits, decimal_places), else None.
+
+    County data carries garbage in narrow fields (e.g. BATHROOM_COUNT=1220 on a
+    DecimalField(4,1)). Such a value crashes the whole batch on save. We treat an
+    out-of-range value as UNKNOWN rather than clamping it to a fabricated number —
+    the verbatim value is never lost, it stays in the RawSnapshot payload.
+    """
+    d = _dec(v)
+    if d is None:
+        return None
+    try:
+        q = d.quantize(Decimal(1).scaleb(-decimal_places))
+    except InvalidOperation:
+        return None
+    if len(q.as_tuple().digits) > max_digits:
+        return None
+    return q
+
+
 def _parse_yyyymmdd(v):
     v = _str(v)
     if len(v) == 8 and v.isdigit():
@@ -150,11 +170,11 @@ def ingest_feature(attributes, geometry=None, source_url="", observed_at=None):
             address_line=_join_nonempty(a.get("TRUE_SITE_ADDR"), a.get("TRUE_SITE_UNIT")),
             city=_str(a.get("TRUE_SITE_CITY")),
             zip_code=_str(a.get("TRUE_SITE_ZIP_CODE"))[:12],
-            latitude=_dec(lat),
-            longitude=_dec(lng),
+            latitude=_dec_fit(lat, 9, 6),
+            longitude=_dec_fit(lng, 9, 6),
             year_built=_pos_int(a.get("YEAR_BUILT")),
             beds=_int0(a.get("BEDROOM_COUNT")),
-            baths=_dec(a.get("BATHROOM_COUNT")),
+            baths=_dec_fit(a.get("BATHROOM_COUNT"), 4, 1),
             living_sqft=_pos_int(a.get("BUILDING_HEATED_AREA")),
             land_use=_str(a.get("DOR_DESC"))[:120],
         ),

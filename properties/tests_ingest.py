@@ -80,3 +80,55 @@ class AppraiserIngestTests(TestCase):
 
         p = Parcel.objects.get(folio="0101000000020")
         self.assertEqual(OwnershipSnapshot.objects.filter(parcel=p).count(), 2)
+
+
+# A second parcel with its own owner/assessment/deed, plus an absurd county
+# BATHROOM_COUNT (1220) — pulled from real ZIP 33131 data (folio 0102100301130)
+# where the county stores garbage in the field. baths is DecimalField(4,1), so a
+# value > 999.9 must NOT crash ingest; the raw value stays in RawSnapshot.
+SAMPLE_ATTRS_2 = {
+    "OBJECTID": 2, "FOLIO": "0102100301130",
+    "TRUE_SITE_ADDR": "100 BISCAYNE BLVD", "TRUE_SITE_UNIT": "2201",
+    "TRUE_SITE_CITY": "Miami", "TRUE_SITE_ZIP_CODE": "33131-0000",
+    "TRUE_OWNER1": "BISCAYNE TOWER", "TRUE_OWNER2": "", "TRUE_OWNER3": "LLC",
+    "DOR_DESC": "RESIDENTIAL : CONDOMINIUM",
+    "BEDROOM_COUNT": 2, "BATHROOM_COUNT": 1220,  # absurd county value
+    "BUILDING_HEATED_AREA": 1100, "YEAR_BUILT": 1985,
+    "ASSESSMENT_YEAR_CUR": 2026, "ASSESSED_VAL_CUR": 450000,
+    "DOS_1": "20190115", "PRICE_1": 525000,
+}
+SAMPLE_GEOM_2 = {"x": -80.18691234567, "y": 25.76554321}
+
+
+class SliceScaleIdempotencyTests(TestCase):
+    """Prove the ingest survives a realistic multi-record slice and that
+    re-running the SAME slice is idempotent (no duplicate deeds, no duplicate
+    assessment for the same year, no duplicate unchanged-ownership rows)."""
+
+    BATCH = [
+        (SAMPLE_ATTRS, SAMPLE_GEOM),
+        (SAMPLE_ATTRS_2, SAMPLE_GEOM_2),
+    ]
+
+    def _run_slice(self):
+        for attrs, geom in self.BATCH:
+            ingest_feature(attrs, geom, source_url="http://example/query")
+
+    def test_absurd_bathroom_count_does_not_crash(self):
+        """County garbage (1220 baths) must ingest as unknown, not crash."""
+        self._run_slice()
+        p = Parcel.objects.get(folio="0102100301130")
+        self.assertIsNone(p.baths)  # out-of-range -> unknown, not a clamped lie
+        # raw value is never lost — it lives in the provenance payload
+        raw = RawSnapshot.objects.get(source_record_id="0102100301130")
+        self.assertEqual(raw.payload["BATHROOM_COUNT"], 1220)
+
+    def test_slice_rerun_is_idempotent(self):
+        self._run_slice()
+        self._run_slice()  # re-scrape the identical slice
+
+        self.assertEqual(Parcel.objects.count(), 2)
+        self.assertEqual(Deed.objects.count(), 2)                 # both sales deduped
+        self.assertEqual(AssessmentSnapshot.objects.count(), 2)   # same year -> idempotent
+        self.assertEqual(OwnershipSnapshot.objects.count(), 2)    # unchanged owners -> no new rows
+        self.assertEqual(RawSnapshot.objects.count(), 4)          # provenance logged each scrape
