@@ -188,6 +188,27 @@ class Parcel(models.Model):
     def __str__(self):
         return self.address_line or self.folio
 
+    # Land-use strings that mark a parcel as administrative, not a real place.
+    THIN_LAND_USE_MARKERS = ("REFERENCE FOLIO", "COMMON AREA")
+
+    @property
+    def is_indexable(self):
+        """Thin-page guard. A parcel earns an indexable public page only if it
+        is a real, describable place with real data. Reference folios, common-
+        area parcels, address-less parcels, and parcels with no positive
+        assessed value (the junk flagged in PROGRESS.md) are NOT indexable —
+        the view renders them with <meta robots noindex> so they never enter
+        the index as thin pages. Pure/derived; no migration."""
+        if not (self.address_line or "").strip():
+            return False
+        land_use = (self.land_use or "").upper()
+        if any(marker in land_use for marker in self.THIN_LAND_USE_MARKERS):
+            return False
+        # Needs at least one positive assessed value (any source) to be real.
+        if not self.assessments.filter(assessed_value__gt=0).exists():
+            return False
+        return True
+
 
 class Building(models.Model):
     """A structure on a parcel. One parcel can hold many buildings/units."""

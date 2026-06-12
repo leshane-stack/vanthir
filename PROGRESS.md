@@ -141,6 +141,68 @@ did not return earlier years for this slice).
 - Still out of scope (by design): other data sources beyond historical assessments, page
   generation, buyer report, scores, entity resolution. Branch not merged/deployed.
 
+## Session 3 (2026-06-12) — Parcel-page template + thin-page guard
+
+On branch `parcel-pages` (not merged; vanthir still has **no git remote**). One template,
+validated on one real folio, before any scaling. No mass-generation, no sitemap.
+
+### URL structure
+- `path("property/<str:folio>/", ...)` → `/property/<folio>/`, name `parcel_detail`.
+  Folio is the spine and the stable unique key, so it's the canonical URL (no address slug
+  to drift/collide). `vanthir/urls.py` now `include("properties.urls")`. `<link rel=canonical>`
+  points at the same folio URL.
+
+### What the page displays (all from that parcel's own rows; no entity resolution)
+- Header: prettified address (ALL-CAPS county string → title case, directionals kept
+  upper), city/state/zip, folio + county.
+- **Owner of record:** raw `OwnershipSnapshot.owner_name_raw` verbatim, labeled "not resolved
+  to a legal entity." Sourced + dated.
+- **Characteristics:** year built / living sqft / land use (+ beds/baths only if > 0, so
+  commercial parcels don't show "0 beds").
+- **Sale history:** table from `Deed` rows (recorded date, price, raw grantee).
+- **Assessed-value trajectory (the differentiated content):** CSS bar chart + table of the
+  3 tax-roll years (assessed / market / taxable) with a computed net-% change.
+- **Flood risk:** from `FloodZoneSnapshot` if present; else honest "not ingested yet."
+- Every section carries a `Source: … · date` line (appraiser vs tax roll).
+
+### Computed FAQ + JSON-LD
+- `properties/parcel_page.py::build_parcel_page()` computes 4 parcel-specific Q&As (owner /
+  value trajectory / last sale / flood) as plain strings, reused **verbatim** in both the
+  visible FAQ block and a `FAQPage` JSON-LD `<script>`, so structured data always matches the
+  page. JSON-LD is angle-bracket-escaped (no `</script>` breakout).
+
+### Thin-page guard
+- `Parcel.is_indexable` (model property, no migration): a parcel is **not** indexable if it
+  has no address, OR land use contains `REFERENCE FOLIO` / `COMMON AREA`, OR it has no
+  positive assessed value. Non-indexable pages render `<meta robots noindex,follow>`, drop the
+  FAQ JSON-LD entirely, and show a "not indexed" badge + footer note. (Chose noindex over 404
+  so a human with the link can still view it.)
+
+### Rendered samples (from the live local DB)
+- **Good — `0101110601160` / 41 E Flagler St** (HTTP 200, indexable, no robots meta): owner
+  *41 FLAGLER REALTY LLC*; retail, 60,426 sqft, built 1928; sold May 26 2021 for $27,200,000;
+  trajectory $11,428,750 (2023) → $12,571,625 (2024) → $11,211,250 (2025), net **−1.9%**; flood
+  "not ingested yet." 4 FAQ Q&As emitted as valid FAQPage JSON-LD.
+- **Junk — `0102090901321`** (reference folio, no address, $0 all years): renders with
+  `noindex,follow`, "not indexed" badge, and **no** JSON-LD — thin-guard working.
+- Tests: `properties/tests_pages.py` (5) cover indexable render, JSON-LD validity/specificity,
+  and 3 thin-guard cases (reference folio, common-area-with-address, address-but-no-value).
+  Full suite **18 passing**.
+
+### Note on PR step
+A create-PR command fired this session targeting the **conductatlas** repo — but all this work
+is in **vanthir**, which has no GitHub remote, and conductatlas is unrelated. No PR was
+created; work committed locally on `parcel-pages` only. Decide later if/where vanthir should be
+pushed.
+
+## Open decisions for next time
+- **Scaling beyond one page** (explicitly deferred): routing/sitemap that emits ONLY indexable
+  parcels, address-based slugs if wanted, list/index pages.
+- **Address prettifier** is heuristic (`16 SE 2 ST` → `16 SE 2 St`); fine for now, revisit if
+  odd casings appear at scale.
+- Carried over from Session 2: year depth (3 cycles only), `annual_tax` null, value breakdown
+  not modeled, per-folio backfill speed.
+
 ## Machine note
 If a Django command ever fails with `No module named 'config'`, run
 `unset DJANGO_SETTINGS_MODULE` and retry (stale env var). Didn't recur this session.

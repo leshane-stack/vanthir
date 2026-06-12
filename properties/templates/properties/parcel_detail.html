@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ display_address }}{% if city_state_zip %}, {{ city_state_zip }}{% endif %} — Property Record | Vanthir</title>
+
+  {% if indexable %}
+  <meta name="description" content="Property record for {{ display_address }}{% if city_state_zip %}, {{ city_state_zip }}{% endif %}: owner of record, sale history, and {% if traj_years %}{{ traj_years }} {% endif %}assessed-value trajectory, each sourced to the {{ appraiser_label }}.">
+  {% else %}
+  {# Thin-page guard: reference folios, common-area, address-less / $0 parcels never get indexed. #}
+  <meta name="robots" content="noindex,follow">
+  {% endif %}
+
+  <link rel="canonical" href="/property/{{ parcel.folio }}/">
+
+  <style>
+    :root { --ink:#1a1d21; --muted:#5b636b; --line:#e3e6ea; --bar:#2f6f4f; --bg:#fff; }
+    * { box-sizing:border-box; }
+    body { font:16px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:var(--bg); margin:0; }
+    main { max-width:760px; margin:0 auto; padding:2rem 1.25rem 4rem; }
+    h1 { font-size:1.7rem; margin:0 0 .15rem; }
+    .sub { color:var(--muted); margin:0 0 1.5rem; }
+    .folio { font-size:.8rem; color:var(--muted); }
+    section { border-top:1px solid var(--line); padding:1.4rem 0 .4rem; }
+    h2 { font-size:1.05rem; margin:0 0 .8rem; }
+    .src { font-size:.78rem; color:var(--muted); margin:.5rem 0 0; }
+    dl.kv { display:grid; grid-template-columns:max-content 1fr; gap:.35rem 1.2rem; margin:0; }
+    dl.kv dt { color:var(--muted); }
+    dl.kv dd { margin:0; }
+    .owner { font-size:1.15rem; font-weight:600; }
+    .badge { display:inline-block; font-size:.7rem; font-weight:600; padding:.1rem .45rem; border-radius:3px; background:#eef3f0; color:var(--bar); margin-left:.4rem; vertical-align:middle; }
+    table { border-collapse:collapse; width:100%; font-size:.95rem; }
+    th,td { text-align:right; padding:.4rem .5rem; border-bottom:1px solid var(--line); }
+    th:first-child,td:first-child { text-align:left; }
+    .chart { display:flex; align-items:flex-end; gap:1.5rem; height:160px; margin:.5rem 0 1rem; }
+    .chart .col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+    .chart .bar { width:100%; max-width:90px; background:var(--bar); border-radius:4px 4px 0 0; }
+    .chart .val { font-size:.78rem; margin-bottom:.3rem; color:var(--ink); }
+    .chart .yr { font-size:.82rem; color:var(--muted); margin-top:.35rem; }
+    .net { font-weight:600; }
+    .net.up { color:#1f7a44; } .net.down { color:#b23b3b; }
+    .faq dt { font-weight:600; margin-top:1rem; }
+    .faq dd { margin:.25rem 0 0; color:#33383d; }
+    .empty { color:var(--muted); font-style:italic; }
+    footer { border-top:1px solid var(--line); margin-top:2rem; padding-top:1rem; font-size:.8rem; color:var(--muted); }
+  </style>
+
+  {% if indexable %}{# no structured data for thin/noindexed pages #}
+  <script type="application/ld+json">{{ faq_jsonld|safe }}</script>
+  {% endif %}
+</head>
+<body>
+<main>
+  <header>
+    <h1>{{ display_address }}{% if not indexable %}<span class="badge">not indexed</span>{% endif %}</h1>
+    <p class="sub">{{ city_state_zip }}<br><span class="folio">Folio {{ parcel.folio }} · {{ parcel.county }} County, {{ parcel.state }}</span></p>
+  </header>
+
+  <!-- Owner -->
+  <section>
+    <h2>Owner of record</h2>
+    {% if owner_raw %}
+      <p class="owner">{{ owner_raw }}</p>
+      <p class="src">Source: {{ appraiser_label }}{% if owner_observed %} · observed {{ owner_observed|date:"M j, Y" }}{% endif %}. Owner string shown verbatim; not resolved to a legal entity.</p>
+    {% else %}
+      <p class="empty">No owner of record ingested.</p>
+    {% endif %}
+  </section>
+
+  <!-- Characteristics -->
+  {% if characteristics %}
+  <section>
+    <h2>Property characteristics</h2>
+    <dl class="kv">
+      {% for label, value in characteristics %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}
+    </dl>
+    <p class="src">Source: {{ appraiser_label }}.</p>
+  </section>
+  {% endif %}
+
+  <!-- Sale history -->
+  <section>
+    <h2>Sale history</h2>
+    {% if sale_rows %}
+      <table>
+        <thead><tr><th>Recorded</th><th>Price</th><th>Grantee (raw)</th></tr></thead>
+        <tbody>
+          {% for d in sale_rows %}
+          <tr>
+            <td>{% if d.recorded_date %}{{ d.recorded_date|date:"M j, Y" }}{% else %}—{% endif %}</td>
+            <td>{{ d.price_display }}</td>
+            <td>{{ d.grantee_raw|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="src">Source: {{ appraiser_label }} recorded deeds.</p>
+    {% else %}
+      <p class="empty">No recorded sale on file.</p>
+    {% endif %}
+  </section>
+
+  <!-- Assessed-value trajectory (differentiated content) -->
+  <section>
+    <h2>Assessed-value trajectory{% if traj_years %} ({{ traj_years }}){% endif %}</h2>
+    {% if trajectory %}
+      <div class="chart" role="img" aria-label="Assessed value by year">
+        {% for t in trajectory %}
+        <div class="col">
+          <span class="val">{{ t.assessed_display }}</span>
+          <div class="bar" style="height:{{ t.bar_pct }}%"></div>
+          <span class="yr">{{ t.year }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if net_pct is not None %}
+      <p>Net change over {{ traj_years }}:
+        <span class="net {% if net_pct > 0 %}up{% elif net_pct < 0 %}down{% endif %}">{{ net_pct|floatformat:1 }}%</span>
+      </p>
+      {% endif %}
+      <table>
+        <thead><tr><th>Tax year</th><th>Assessed</th><th>Market</th><th>Taxable</th></tr></thead>
+        <tbody>
+          {% for t in trajectory %}
+          <tr><td>{{ t.year }}</td><td>{{ t.assessed_display }}</td><td>{{ t.market_display }}</td><td>{{ t.taxable_display }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="src">Source: {{ tax_roll_label }}, {{ traj_years }}.</p>
+    {% else %}
+      <p class="empty">No multi-year assessed-value history ingested for this parcel.</p>
+    {% endif %}
+  </section>
+
+  <!-- Flood -->
+  <section>
+    <h2>Flood risk</h2>
+    {% if flood %}
+      <dl class="kv">
+        {% if flood.zone %}<dt>FEMA zone</dt><dd>{{ flood.zone }}</dd>{% endif %}
+        {% if flood.in_sfha is not None %}<dt>Special Flood Hazard Area</dt><dd>{{ flood.in_sfha|yesno:"Yes,No" }}</dd>{% endif %}
+        {% if flood.panel %}<dt>Panel</dt><dd>{{ flood.panel }}</dd>{% endif %}
+      </dl>
+      <p class="src">Source: FEMA, observed {{ flood.observed_at|date:"M j, Y" }}.</p>
+    {% else %}
+      <p class="empty">No FEMA flood-zone data ingested for this parcel yet.</p>
+    {% endif %}
+  </section>
+
+  <!-- Computed FAQ -->
+  <section class="faq">
+    <h2>Frequently asked questions</h2>
+    <dl>
+      {% for q, a in faqs %}<dt>{{ q }}</dt><dd>{{ a }}</dd>{% endfor %}
+    </dl>
+  </section>
+
+  <footer>
+    All facts on this page are derived from public records and labeled with their source and date.
+    Vanthir furnishes property and entity intelligence, not determinations about individuals.
+    {% if not indexable %}<br><strong>This parcel is a thin/administrative record and is excluded from search indexing.</strong>{% endif %}
+  </footer>
+</main>
+</body>
+</html>
