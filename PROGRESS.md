@@ -251,6 +251,67 @@ not all-200, so the guard is applied.
 2. **Submit `/sitemap.xml` to Google Search Console** once the domain is live.
 3. Then scale ingestion to more ZIPs — pages and sitemap grow automatically (no code change).
 
+## Session 5 (2026-06-12) — First deployment to Railway (LIVE)
+
+Vanthir is deployed and serving real data.
+
+### Where it lives
+- **GitHub:** `github.com/leshane-stack/vanthir`, deploy branch `main` (SSH remote `origin`).
+- **Railway:** workspace `leshane-stack` › project **`determined-hope`** › service **`vanthir`**,
+  environment `production`, region US West. Postgres added as a second service in the same project.
+- **Live URL:** **https://vanthir-production.up.railway.app**
+- **Env vars (vanthir service):** `SECRET_KEY` (generated), `DEBUG=0`, `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
+  `settings.py` auto-adds `RAILWAY_PUBLIC_DOMAIN` to ALLOWED_HOSTS/CSRF.
+
+### Production data (ZIP 33131) — matches local exactly
+| | count |
+|---|---|
+| parcels | 200 |
+| indexable (in sitemap) | 164 |
+| ownership snapshots | 198 |
+| deeds | 134 |
+| tax_roll assessments (2023–2025) | 594 |
+| tax_roll RawSnapshots | 206 |
+
+### Deploy mechanics / fixes made this session
+- **Migrations** run via railway.json `deploy.preDeployCommand` (runtime). Build = `collectstatic` only.
+- **Three real bugs surfaced by the first prod deploy (all fixed + committed):**
+  1. **NUL in payloads** — PA-proxy payloads contain ` `; Postgres rejects it in JSON (SQLite didn't).
+     Added `_strip_nul()` to both adapters (`+ regression test`). Without this, a direct prod historical
+     ingest would crash.
+  2. **Build-time migrate** — Procfile `release:` ran migrate during *build*, where `postgres.railway.internal`
+     doesn't resolve → build failed. Removed it; migrate now runtime-only via `preDeployCommand`.
+  3. **Healthcheck under DEBUG=0** — `SECURE_SSL_REDIRECT` 301'd `/healthz`, failing the healthcheck.
+     Added `SECURE_REDIRECT_EXEMPT = [r"^healthz$"]`.
+- Full local suite still green: **25 tests**.
+
+### How the data got into prod (important, honest note)
+The appraiser ingest ran directly against prod (ArcGIS reachable). The **historical backfill could not** —
+`apps.miamidadepa.gov` (PA proxy) was geo-unreachable from the deploy environment at ingest time (it's
+intermittent; worked in Session 2). So the **594 historical rows were transferred from the validated local
+DB** (Session 2's ingest), with provenance, rather than re-scraped in prod. Same real county data (2023–2025
+finalized values); only the `observed_at` reflects the Session-2 scrape. A future prod-side backfill (from a
+US network) would reproduce identical values — the `_strip_nul` fix now makes that safe on Postgres.
+
+### Live verification (all pass)
+- `/sitemap.xml` → 200, 164 https URLs, 41 E Flagler present, junk folio absent.
+- `/property/0101110601160/` (41 E Flagler St) → 200, not noindex, owner + $27,200,000 sale +
+  $11,428,750→ trajectory + FAQPage JSON-LD.
+- reference folio `/property/0102090901321/` → 200, `noindex`.
+- `DEBUG=0` confirmed (plain 404, no debug page).
+
+### What remains
+- **GitHub auto-deploy isn't firing on push** — git pushes did not trigger deploys; I deployed with
+  `railway up` (which may have switched the service's source to CLI-uploaded). To restore push-to-deploy,
+  reconnect the repo in the Railway dashboard (Service → Settings → Connect Repo); otherwise deploy via
+  `railway up` after pushing.
+- **Delete the accidental empty project `laudable-education`** (created during setup, unused).
+- **Point a custom domain** (e.g. vanthir.com) in Railway if desired (settings already trust `RAILWAY_PUBLIC_DOMAIN`;
+  add the custom host to `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS` env or rely on the domain var).
+- **Submit `/sitemap.xml` to Google Search Console** — your manual step now that the site is live.
+- **Scale ingestion to more ZIPs** — pages and sitemap auto-grow with no code change (ideally run the
+  historical backfill from a US network so it scrapes prod directly).
+
 ## Machine note
 If a Django command ever fails with `No module named 'config'`, run
 `unset DJANGO_SETTINGS_MODULE` and retry (stale env var). Didn't recur this session.
