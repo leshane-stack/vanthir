@@ -203,6 +203,54 @@ pushed.
 - Carried over from Session 2: year depth (3 cycles only), `annual_tax` null, value breakdown
   not modeled, per-folio backfill speed.
 
+## Session 4 (2026-06-12) — Sitemap for indexable parcel pages
+
+On branch `parcel-sitemap` (not merged; vanthir still has **no git remote**, not deployed).
+Sitemap only — no new data, no new page types. Scales to what's in the DB now (ZIP 33131)
+and auto-grows as more ZIPs are ingested.
+
+### Indexable page set (Step 1, of 200 parcels in 33131)
+| | count |
+|---|---|
+| Total parcels | 200 |
+| **Indexable (in sitemap)** | **164** |
+| Excluded | 36 |
+| — no address | 25 |
+| — reference folio | 7 |
+| — common area | 4 |
+| — no positive $ value | 0 (already caught by the above) |
+
+82% indexable — sane (the 25 no-address matches the Session-1 vacant/govt finding). Not 0,
+not all-200, so the guard is applied.
+
+### Mechanism
+- **Django sitemaps framework** (`django.contrib.sitemaps` added to INSTALLED_APPS; no DB
+  migration). `properties/sitemaps.py::ParcelSitemap`: `items()` = `Parcel.objects.indexable()`
+  ordered by folio; `location()` = `reverse("parcel_detail", folio)`; `lastmod()` =
+  `parcel.updated_at`; `protocol="https"`, `changefreq="monthly"`, `priority=0.6`.
+- **No hardcoded list** — driven by a new `Parcel.objects.indexable()` queryset (set-level twin
+  of `Parcel.is_indexable`): excludes blank/whitespace address, `REFERENCE FOLIO`/`COMMON AREA`
+  land use, and parcels with no `assessed_value > 0`. A test pins this queryset to the
+  per-object guard so they can't drift.
+- **No `django.contrib.sites`** — the sitemap view derives the host from the request
+  (RequestSite), so URLs are correct locally and in prod with no hardcoded domain.
+- **Serves at `/sitemap.xml`** (wired in `vanthir/urls.py`).
+
+### Validation (Step 3, all green)
+- `/sitemap.xml` → HTTP 200, `application/xml`, well-formed (parsed with minidom).
+- Exactly **164** `<loc>` URLs = `indexable()` count; all `https://…/property/<folio>/`.
+- Junk folios absent: `0102090901321` (reference), `0101000000270` (no-addr govt),
+  `0101140301150` (common area). Good folio `0101110601160` (41 E Flagler St) present.
+- Spot-checked sitemap URLs render 200 and are **not** noindex.
+- `properties/tests_sitemap.py` (6 tests) covers all of the above. Full suite: **24 passing**.
+
+### What remains (next sessions)
+1. **Deploy Vanthir to Railway** — it isn't deployed yet, so the pages + `/sitemap.xml` aren't
+   publicly crawlable. Railway config (`Procfile`, `railway.json`, `runtime.txt`) already
+   exists; needs a `DATABASE_URL` (Postgres) and the 33131 data ingested in that environment.
+2. **Submit `/sitemap.xml` to Google Search Console** once the domain is live.
+3. Then scale ingestion to more ZIPs — pages and sitemap grow automatically (no code change).
+
 ## Machine note
 If a Django command ever fails with `No module named 'config'`, run
 `unset DJANGO_SETTINGS_MODULE` and retry (stale env var). Didn't recur this session.

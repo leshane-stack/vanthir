@@ -152,6 +152,18 @@ class HOA(models.Model):
         return self.name
 
 
+class ParcelQuerySet(models.QuerySet):
+    def indexable(self):
+        """Set-level twin of `Parcel.is_indexable` — the same thin-page guard as
+        a queryset, so the sitemap can select indexable parcels in one query
+        (and auto-scale as more ZIPs are ingested) instead of a per-row Python
+        loop. Kept in lockstep with `is_indexable` by tests_sitemap.py."""
+        qs = self.exclude(address_line__regex=r"^\s*$")  # no blank/whitespace address
+        for marker in Parcel.THIN_LAND_USE_MARKERS:
+            qs = qs.exclude(land_use__icontains=marker)  # no reference/common-area
+        return qs.filter(assessments__assessed_value__gt=0).distinct()  # has real value
+
+
 class Parcel(models.Model):
     """THE SPINE. The address/folio everything attaches to."""
     folio = models.CharField(max_length=80, unique=True, db_index=True)  # county parcel id
@@ -178,6 +190,8 @@ class Parcel(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ParcelQuerySet.as_manager()
 
     class Meta:
         indexes = [
