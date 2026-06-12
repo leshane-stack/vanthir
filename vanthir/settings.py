@@ -92,6 +92,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Production hardening (active when DEBUG=0).
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
+    # Railway's healthcheck hits /healthz over plain HTTP; without this it would
+    # be 301'd to HTTPS and the healthcheck (and deploy) would fail.
+    SECURE_REDIRECT_EXEMPT = [r"^healthz$"]
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
