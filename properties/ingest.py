@@ -121,6 +121,21 @@ def _dec_fit(v, max_digits, decimal_places):
     return q
 
 
+def _strip_nul(obj):
+    """Recursively strip NUL (\\x00) characters from a payload before it is
+    stored in a RawSnapshot. SQLite tolerates NUL, but PostgreSQL rejects
+    \\u0000 in json/text — and county payloads do carry it (e.g. the PA proxy
+    emits "MarriedFlag":"\\u0000"). Without this, RawSnapshot inserts crash in
+    production Postgres even though they pass locally on SQLite."""
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [_strip_nul(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _strip_nul(v) for k, v in obj.items()}
+    return obj
+
+
 def _parse_yyyymmdd(v):
     v = _str(v)
     if len(v) == 8 and v.isdigit():
@@ -153,7 +168,7 @@ def ingest_feature(attributes, geometry=None, source_url="", observed_at=None):
         source=SOURCE,
         source_url=source_url,
         source_record_id=folio,
-        payload=a,
+        payload=_strip_nul(a),
         observed_at=observed_at,
     )
 

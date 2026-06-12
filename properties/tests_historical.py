@@ -10,6 +10,7 @@ the 2023 row where AssessedValue != TotalValue, and the absurd BathroomCount=122
 the appraiser slice already exposed.
 """
 
+import json
 from datetime import date
 
 from django.test import TestCase
@@ -133,3 +134,28 @@ class HistoricalSliceIdempotencyTests(TestCase):
         self.assertEqual(
             AssessmentSnapshot.objects.filter(source=SOURCE).count(), 9
         )
+
+
+class RawSnapshotNulSanitizationTests(TestCase):
+    """The PA proxy emits NUL (\\u0000) in some fields (e.g. MarriedFlag).
+    SQLite stores it but PostgreSQL rejects \\u0000 in json — so the RawSnapshot
+    payload must be stripped of NUL before saving, or prod ingests crash."""
+
+    def test_nul_chars_stripped_from_raw_payload(self):
+        payload = {
+            "PropertyInfo": {"FolioNumber": "0101110601160", "Owner": "ACME\x00 LLC"},
+            "OwnerInfos": [{"MarriedFlag": "\x00", "Name": "ACME LLC"}],
+            "Assessment": {"AssessmentInfos": [
+                {"Year": 2025, "AssessedValue": 100, "TotalValue": 100},
+            ]},
+            "Taxable": {"TaxableInfos": [{"Year": 2025, "CountyTaxableValue": 100}]},
+        }
+        ingest_assessment_history("0101110601160", payload, source_url="http://pa/x")
+
+        raw = RawSnapshot.objects.get(source=SOURCE, source_record_id="0101110601160")
+        blob = json.dumps(raw.payload)
+        self.assertNotIn("\x00", blob)
+        self.assertNotIn("\\u0000", blob)
+        # non-NUL content preserved
+        self.assertEqual(raw.payload["OwnerInfos"][0]["Name"], "ACME LLC")
+        self.assertEqual(raw.payload["PropertyInfo"]["Owner"], "ACME LLC")

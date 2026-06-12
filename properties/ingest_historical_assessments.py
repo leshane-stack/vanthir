@@ -34,7 +34,7 @@ from django.db import transaction
 from django.utils import timezone
 
 # Reuse the appraiser adapter's value helpers — one source of truth, no dup.
-from properties.ingest import _dec_fit, _int0, _str
+from properties.ingest import _dec_fit, _int0, _str, _strip_nul
 from properties.models import Parcel, AssessmentSnapshot, RawSnapshot
 
 SOURCE = "miami_dade_tax_roll"
@@ -103,7 +103,7 @@ def ingest_assessment_history(folio, payload, source_url="", observed_at=None):
         source=SOURCE,
         source_url=source_url,
         source_record_id=folio,
-        payload=payload,
+        payload=_strip_nul(payload),
         observed_at=observed_at,
     )
 
