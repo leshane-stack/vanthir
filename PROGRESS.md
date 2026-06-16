@@ -351,7 +351,7 @@ at the Railway app via Cloudflare; Django needs to accept the new hosts.
 
 ## Session 7 (2026-06-16) — Homepage + canonical www→apex redirect
 
-On branch `homepage` (committed, NOT pushed/deployed — needs `railway up`).
+Merged to `main` (`c613323`) and **DEPLOYED** via `railway up` — live and verified (below).
 
 ### Homepage at `/`
 - New routes in `properties/urls.py`: `path("", home)` and `path("search/", search)`
@@ -384,8 +384,14 @@ On branch `homepage` (committed, NOT pushed/deployed — needs `railway up`).
 - www host → **301** `https://vanthir.com/...` (query preserved).
 - `properties/tests_home.py` adds 10 tests (homepage, search, canonical redirect). Suite: **35 passing**.
 
+### Deployed + live verification (all green)
+- `railway up` deploy succeeded; healthcheck passed (collectstatic at build, migrate at runtime).
+- `https://vanthir.com/` → **200 homepage** (intro present, not 404, not noindex).
+- `https://www.vanthir.com/` → **301** → `https://vanthir.com/` (and `/property/<folio>/` preserves the
+  path); `Server: railway-hikari` confirms the redirect is the Django middleware. Apex DNS now resolves.
+- `https://vanthir.com/property/0101110601160/` → 200 (owner present); `…/sitemap.xml` → 200, 164 URLs.
+
 ### Remaining
-- Push branch + `railway up` to deploy the homepage (owner to approve).
 - Address search is substring-only (no normalized address index) — fine for now; a fuzzier search
   is a possible follow-up.
 - Still open from prior sessions: apex DNS propagation, optional re-add of the railway domain to
