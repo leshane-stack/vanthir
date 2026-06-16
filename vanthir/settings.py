@@ -8,9 +8,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key-change-in-prod")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
+# ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS read from env (comma-separated) and fall
+# back to the real production domains + localhost, so the app is correct out of
+# the box and self-documents the hosts it serves. Set the env vars on Railway to
+# override; RAILWAY_PUBLIC_DOMAIN (below) is always appended so the
+# *.up.railway.app host keeps working regardless.
+_DEFAULT_ALLOWED_HOSTS = "vanthir.com,www.vanthir.com,localhost,127.0.0.1"
+_DEFAULT_CSRF_ORIGINS = "https://vanthir.com,https://www.vanthir.com"
+
+ALLOWED_HOSTS = [
+    h for h in os.environ.get("ALLOWED_HOSTS", _DEFAULT_ALLOWED_HOSTS).split(",") if h
+]
 CSRF_TRUSTED_ORIGINS = [
-    o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o
+    o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", _DEFAULT_CSRF_ORIGINS).split(",") if o
 ]
 # Railway provides the public domain in this env var.
 _railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")

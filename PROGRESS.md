@@ -312,6 +312,28 @@ US network) would reproduce identical values — the `_strip_nul` fix now makes 
 - **Scale ingestion to more ZIPs** — pages and sitemap auto-grow with no code change (ideally run the
   historical backfill from a US network so it scrapes prod directly).
 
+## Session 6 (2026-06-12) — Custom domain (vanthir.com) host/CSRF config
+
+On branch `custom-domain` (not pushed/deployed). Pointing `vanthir.com` + `www.vanthir.com`
+at the Railway app via Cloudflare; Django needs to accept the new hosts.
+
+- **Case A** (env-driven): `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` read from env vars in
+  `settings.py`, and `RAILWAY_PUBLIC_DOMAIN` is always appended (Railway host preserved).
+- **Code change:** updated the hardcoded fallback defaults to be self-documenting and to drop
+  the insecure `"*"` default:
+  - `ALLOWED_HOSTS` default → `vanthir.com,www.vanthir.com,localhost,127.0.0.1`
+  - `CSRF_TRUSTED_ORIGINS` default → `https://vanthir.com,https://www.vanthir.com`
+  Env vars still override; `RAILWAY_PUBLIC_DOMAIN` still appended. Local dev keeps
+  `localhost`/`127.0.0.1`; tests unaffected (runner auto-adds `testserver`). `check` clean,
+  **25 tests passing**.
+- **Railway env vars to set (authoritative, recommended)** on the `vanthir` service:
+  - `ALLOWED_HOSTS = vanthir.com,www.vanthir.com`
+  - `CSRF_TRUSTED_ORIGINS = https://vanthir.com,https://www.vanthir.com`
+  (Railway domain auto-appended both places — don't add it manually.)
+- **Takes effect on next deploy** (`railway up`) and/or when the env vars are set (setting a
+  Railway var redeploys). Also requires the custom domain added in Railway (Service → Settings →
+  Networking → Custom Domain) and Cloudflare CNAME → the Railway target, DNS-only or proxied.
+
 ## Machine note
 If a Django command ever fails with `No module named 'config'`, run
 `unset DJANGO_SETTINGS_MODULE` and retry (stale env var). Didn't recur this session.
