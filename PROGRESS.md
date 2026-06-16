@@ -334,6 +334,21 @@ at the Railway app via Cloudflare; Django needs to accept the new hosts.
   Railway var redeploys). Also requires the custom domain added in Railway (Service → Settings →
   Networking → Custom Domain) and Cloudflare CNAME → the Railway target, DNS-only or proxied.
 
+### Deployed (merged to main + railway up) — outcome
+- Merged `custom-domain` → `main` and deployed via `railway up`. Railway env vars set by owner:
+  `ALLOWED_HOSTS=vanthir.com,www.vanthir.com`, `CSRF_TRUSTED_ORIGINS=https://vanthir.com,https://www.vanthir.com`.
+- **Healthcheck-host fix (commit `d3a9d8a`):** the first `railway up` FAILED healthcheck — dropping the
+  `"*"` default meant Railway's probe (`Host: healthcheck.railway.app`) 400'd. Fixed by always appending
+  `healthcheck.railway.app` to ALLOWED_HOSTS when on Railway. Redeploy succeeded.
+- **`www.vanthir.com` is LIVE** — sitemap 200/164 URLs, 41 E Flagler St 200 (data, not noindex), junk folio
+  noindexed. `RAILWAY_PUBLIC_DOMAIN` is now `vanthir.com` (Railway made the custom domain canonical).
+- **Pending / follow-ups:**
+  - `vanthir.com` (apex) not resolving yet — Cloudflare apex DNS still to propagate (www works).
+  - `vanthir-production.up.railway.app` now 400s (RAILWAY_PUBLIC_DOMAIN flipped to vanthir.com, so the
+    railway host is no longer auto-appended). To keep it working, add it to the env var:
+    `ALLOWED_HOSTS=vanthir.com,www.vanthir.com,vanthir-production.up.railway.app`.
+  - Then: submit `/sitemap.xml` to Search Console (use the canonical domain), scale ingestion to more ZIPs.
+
 ## Machine note
 If a Django command ever fails with `No module named 'config'`, run
 `unset DJANGO_SETTINGS_MODULE` and retry (stale env var). Didn't recur this session.
