@@ -26,6 +26,10 @@ CSRF_TRUSTED_ORIGINS = [
 _railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
 if _railway_domain:
     ALLOWED_HOSTS.append(_railway_domain)
+    # Railway's platform healthcheck probes with Host: healthcheck.railway.app —
+    # must be allowed or the deploy healthcheck 400s once ALLOWED_HOSTS is
+    # restrictive (i.e. not "*").
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
     CSRF_TRUSTED_ORIGINS.append(f"https://{_railway_domain}")
 
 INSTALLED_APPS = [
