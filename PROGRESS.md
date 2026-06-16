@@ -349,6 +349,48 @@ at the Railway app via Cloudflare; Django needs to accept the new hosts.
     `ALLOWED_HOSTS=vanthir.com,www.vanthir.com,vanthir-production.up.railway.app`.
   - Then: submit `/sitemap.xml` to Search Console (use the canonical domain), scale ingestion to more ZIPs.
 
+## Session 7 (2026-06-16) — Homepage + canonical www→apex redirect
+
+On branch `homepage` (committed, NOT pushed/deployed — needs `railway up`).
+
+### Homepage at `/`
+- New routes in `properties/urls.py`: `path("", home)` and `path("search/", search)`
+  (parcel/sitemap routes unchanged). Views `home`/`search` in `properties/views.py`.
+- Template `properties/templates/properties/home.html` — matches the parcel-page styling
+  (same CSS vars/fonts). Contains: headline “Vanthir”, lede “Property intelligence for
+  Miami-Dade County”, honest sourced-data intro (not a listings/estimate site), a search box,
+  a dynamic **Example parcels** list, and a footer linking `/sitemap.xml`.
+- **Indexable** (no noindex; `<link rel=canonical href="https://vanthir.com/">`).
+- Example parcels are selected **dynamically** (never hardcoded): `Parcel.objects.indexable()`
+  with a building (`living_sqft`) and a recorded sale, biggest first, limit 8 — so it stays valid
+  as more data is ingested. Currently surfaces downtown towers (701/1111 Brickell Ave, 200 S
+  Biscayne Blvd, …).
+- **Search** (`/search/?q=`): a digits query that matches a folio 302-redirects straight to the
+  parcel page; otherwise an `address_line__icontains` search over indexable parcels (single hit
+  redirects, else a results list). Search-result renders are **noindex** (not canonical pages).
+
+### Canonical domain — www → apex 301 (in Django)
+- `properties/middleware.py::CanonicalDomainMiddleware`, registered FIRST in `MIDDLEWARE` (before
+  SecurityMiddleware, so it's a single hop). Redirects `www.<CANONICAL_HOST>` → `https://<CANONICAL_HOST>`
+  preserving path+query. `CANONICAL_HOST` setting defaults to `vanthir.com` (env-overridable).
+  Railway domain, localhost, and `healthcheck.railway.app` are left untouched.
+- Chosen over a Cloudflare rule: in-repo, testable, robust regardless of proxy config. (Cloudflare
+  alternative if ever preferred: a Bulk Redirect / Redirect Rule `www.vanthir.com/*` → `https://vanthir.com/$1`, 301.)
+
+### Validation (all green, against the live local DB)
+- `/` → 200, not noindex, intro + search box + 8 working example parcel links.
+- Search: `q=Flagler` → 200 list (noindex); folio `q=0101110601160` → 302 to the parcel page.
+- Existing pages unchanged: parcel page 200, sitemap 164 URLs.
+- www host → **301** `https://vanthir.com/...` (query preserved).
+- `properties/tests_home.py` adds 10 tests (homepage, search, canonical redirect). Suite: **35 passing**.
+
+### Remaining
+- Push branch + `railway up` to deploy the homepage (owner to approve).
+- Address search is substring-only (no normalized address index) — fine for now; a fuzzier search
+  is a possible follow-up.
+- Still open from prior sessions: apex DNS propagation, optional re-add of the railway domain to
+  `ALLOWED_HOSTS`, submit sitemap to Search Console, scale ingestion to more ZIPs.
+
 ## Machine note
 If a Django command ever fails with `No module named 'config'`, run
 `unset DJANGO_SETTINGS_MODULE` and retry (stale env var). Didn't recur this session.

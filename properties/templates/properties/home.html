@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vanthir — Miami-Dade Property Intelligence</title>
+
+  {% if is_search %}
+  {# Search-result renders are not the canonical entry page. #}
+  <meta name="robots" content="noindex,follow">
+  {% else %}
+  <meta name="description" content="Vanthir is property intelligence for Miami-Dade: owner of record, sale history, and multi-year assessed-value trajectories for each parcel, sourced from county records.">
+  {% endif %}
+
+  <link rel="canonical" href="{{ canonical_url }}">
+
+  <style>
+    :root { --ink:#1a1d21; --muted:#5b636b; --line:#e3e6ea; --bar:#2f6f4f; --bg:#fff; }
+    * { box-sizing:border-box; }
+    body { font:16px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:var(--bg); margin:0; }
+    main { max-width:760px; margin:0 auto; padding:2rem 1.25rem 4rem; }
+    h1 { font-size:1.9rem; margin:0 0 .4rem; }
+    .lede { font-size:1.1rem; color:#33383d; margin:0 0 1.2rem; }
+    .sub { color:var(--muted); }
+    section { border-top:1px solid var(--line); padding:1.4rem 0 .4rem; }
+    h2 { font-size:1.05rem; margin:0 0 .8rem; }
+    ul.parcels { list-style:none; padding:0; margin:0; }
+    ul.parcels li { padding:.5rem 0; border-bottom:1px solid var(--line); }
+    ul.parcels a { color:var(--bar); text-decoration:none; font-weight:600; }
+    ul.parcels a:hover { text-decoration:underline; }
+    ul.parcels .meta { display:block; font-size:.82rem; color:var(--muted); font-weight:400; }
+    form.search { display:flex; gap:.5rem; margin:.2rem 0 .4rem; }
+    form.search input[type=text] { flex:1; padding:.55rem .7rem; border:1px solid var(--line); border-radius:6px; font-size:1rem; }
+    form.search button { padding:.55rem 1rem; border:0; border-radius:6px; background:var(--bar); color:#fff; font-size:1rem; cursor:pointer; }
+    .hint { font-size:.82rem; color:var(--muted); margin:.2rem 0 0; }
+    .empty { color:var(--muted); font-style:italic; }
+    footer { border-top:1px solid var(--line); margin-top:2rem; padding-top:1rem; font-size:.8rem; color:var(--muted); }
+    footer a { color:var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Vanthir</h1>
+    <p class="lede">Property intelligence for Miami-Dade County.</p>
+    <p class="sub">For any parcel, Vanthir assembles the owner of record, recorded sale history, and
+    a multi-year assessed-value trajectory — each fact dated and sourced to the Miami-Dade Property
+    Appraiser. It's a record of what the public county data says about a property over time, not a
+    listings site or an estimate.</p>
+  </header>
+
+  <!-- Search -->
+  <section>
+    <h2>Look up a property</h2>
+    <form class="search" action="/search/" method="get" role="search">
+      <input type="text" name="q" value="{{ query|default:'' }}" placeholder="Street address or folio number" aria-label="Search by address or folio">
+      <button type="submit">Search</button>
+    </form>
+    <p class="hint">Try a street name (e.g. “Flagler”) or a 13-digit folio number.</p>
+
+    {% if is_search %}
+      <h2 style="margin-top:1.4rem;">Results for “{{ query }}”</h2>
+      {% if results %}
+        <ul class="parcels">
+          {% for p in results %}
+          <li><a href="/property/{{ p.folio }}/">{{ p.address }}</a>
+            <span class="meta">{% if p.city %}{{ p.city }} · {% endif %}Folio {{ p.folio }}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No matching indexed parcels found. Try a different address, or browse the examples below.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <!-- Example parcels -->
+  <section>
+    <h2>Example parcels</h2>
+    {% if examples %}
+      <ul class="parcels">
+        {% for p in examples %}
+        <li><a href="/property/{{ p.folio }}/">{{ p.address }}</a>
+          <span class="meta">{% if p.land_use %}{{ p.land_use }}{% endif %}{% if p.year_built %} · built {{ p.year_built }}{% endif %} · Folio {{ p.folio }}</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">No parcels ingested yet.</p>
+    {% endif %}
+  </section>
+
+  <footer>
+    Coverage is currently Miami-Dade ZIP 33131, expanding. All facts derive from public county
+    records and are labeled with their source and date. Vanthir furnishes property and entity
+    intelligence, not determinations about individuals.
+    <br><a href="/sitemap.xml">Sitemap</a>
+  </footer>
+</main>
+</body>
+</html>

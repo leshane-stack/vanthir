@@ -43,7 +43,11 @@ INSTALLED_APPS = [
     "properties",
 ]
 
+# Canonical public host; www.<this> 301-redirects to the apex (see middleware).
+CANONICAL_HOST = os.environ.get("CANONICAL_HOST", "vanthir.com")
+
 MIDDLEWARE = [
+    "properties.middleware.CanonicalDomainMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
